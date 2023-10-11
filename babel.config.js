@@ -6,6 +6,8 @@ module.exports = function (api) {
       "@babel/plugin-proposal-export-namespace-from",
       "react-native-reanimated/plugin",
       "expo-router/babel",
+      "react-native-classname-to-style",
+      ["react-native-platform-specific-extensions", { extensions: ["css"] }],
     ],
   };
 };

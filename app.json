@@ -30,6 +30,10 @@
     },
     "plugins": [
       "expo-router"
-    ]
+    ],
+    "packagerOpts": {
+      "config": "metro.config.js",
+      "sourceExts": ["js", "jsx", "css", "ts", "tsx"]
+    }
   }
 }

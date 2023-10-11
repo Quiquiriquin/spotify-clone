@@ -1,160 +1,72 @@
-import { Image, StyleSheet, View, Platform } from "react-native";
-import { ImageViewer } from "../components/ImageViewer";
-import Button from "../components/Button";
-import * as MediaLibrary from "expo-media-library";
-import * as ImagePicker from "expo-image-picker";
-import { useRef, useState } from "react";
-import IconButton from "../components/IconButton";
-import CircleButton from "../components/CircleButton";
-import EmojiPicker from "../components/EmojiPicker";
-import EmojiList from "../components/EmojiList";
-import EmojiSticker from "../components/EmojiSticker";
+import { Image, StyleSheet, View, Platform, Text, StyleProp, ViewStyle } from "react-native";
+import * as WebBrowser from 'expo-web-browser'
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { captureRef } from "react-native-view-shot";
-import domtoimage from "dom-to-image";
 import { StatusBar } from "expo-status-bar";
+import styles from './index.module.css';
+import { makeRedirectUri, useAuthRequest } from 'expo-auth-session';
+import { generalStyles } from "../utils/generalStyles";
+import Button from "../components/Button";
+import { useEffect } from "react";
+// 132e3342ef114844816310c2e6fe2884
+// 31b762da947a4dc6afa4ebb292267dbc
 
-const PlaceHolderImage = require("../assets/images/background-image.png");
+WebBrowser.maybeCompleteAuthSession();
+
+const discovery = {
+  authorizationEndpoint: 'https://accounts.spotify.com/authorize',
+  tokenEndpoint: 'https://accounts.spotify.com/api/token',
+};
 
 export default function App() {
-  const [status, requestPermission] = MediaLibrary.usePermissions();
-  const [selectedImage, setSelectedImage] = useState();
-  const [options, setOptions] = useState(false);
-  const [isModalVisible, setIsModalVisible] = useState(false);
-  const [pickedEmoji, setPickedEmoji] = useState(null);
-  const pickImageAsync = async () => {
-    let result: any = await ImagePicker.launchImageLibraryAsync({
-      allowsEditing: true,
-      quality: 1,
-    });
+  const clientId: string = "132e3342ef114844816310c2e6fe2884";
+  const [request, response, promptAsync] = useAuthRequest(
+    {
+      clientId,
+      scopes: ['user-read-email', 'playlist-modify-public', 'user-read-playback-position', 'user-top-read', 'user-read-recently-played', 'playlist-modify-private'],
+      // To follow the "Authorization Code Flow" to fetch token after authorizationEndpoint
+      // this must be set to false
+      usePKCE: false,
+      // redirectUri: makeRedirectUri({
+      //   scheme: 'http://localhost:8081/'
+      // }),
+      redirectUri: 'http://localhost:8081/success'
+    },
+    discovery
+  );
 
-    if (!result.canceled) {
-      console.log(result);
-      setSelectedImage(result.assets[0].uri);
-      setOptions(true);
-    } else {
-      alert("You did not select any image.");
+  useEffect(() => {
+    if (response?.type === 'success') {
+      const { code } = response.params;
     }
-  };
-  if (status === null) {
-    requestPermission();
-  }
-  const onReset = () => {
-    setOptions(false);
-  };
+  }, [response]);
 
-  const onAddSticker = () => {
-    setIsModalVisible(true);
-  };
+  function generateCodeVerifier(length: number) {
+    let text = '';
+    let possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 
-  const onModalClose = () => {
-    setIsModalVisible(false);
-  };
-
-  const onSaveImageAsync = async () => {
-    if (Platform.OS !== "web") {
-      try {
-        const localUri = await captureRef(imageRef, {
-          height: 440,
-          quality: 1,
-        });
-        await MediaLibrary.saveToLibraryAsync(localUri);
-        if (localUri) {
-          alert("Saved!");
-        }
-      } catch (e) {
-        console.log(e);
-      }
-    } else {
-      try {
-        const dataUrl = await domtoimage.toJpeg(imageRef.current, {
-          quality: 0.95,
-          width: 320,
-          height: 440,
-        });
-
-        let link = document.createElement("a");
-        link.download = "sticker-smash.jpeg";
-        link.href = dataUrl;
-        link.click();
-      } catch (e) {
-        console.log(e);
-      }
+    for (let i = 0; i < length; i++) {
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
     }
-  };
+    return text;
+}
 
-  const imageRef = useRef();
+async function generateCodeChallenge(codeVerifier: string) {
+    const data = new TextEncoder().encode(codeVerifier);
+    const digest = await window.crypto.subtle.digest('SHA-256', data);
+    return btoa(String.fromCharCode.apply(null, [...new Uint8Array(digest)]))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+}
 
   return (
-    <GestureHandlerRootView style={styles.container}>
-      <EmojiPicker isVisible={isModalVisible} onClose={onModalClose}>
-        <EmojiList onSelect={setPickedEmoji} onCloseModal={onModalClose} />
-      </EmojiPicker>
-      <View ref={imageRef} style={styles.imageContainer}>
-        <ImageViewer
-          placeholderImageSource={PlaceHolderImage}
-          selectedImage={selectedImage}
-        />
-        {pickedEmoji !== null ? (
-          <EmojiSticker imageSize={40} stickerSource={pickedEmoji} />
-        ) : null}
+    <GestureHandlerRootView style={styles.container as StyleProp<ViewStyle>}>
+      <View>
+        <Button onPress={promptAsync} theme="primary" label="Iniciar sesión" />
+        <StatusBar style="light" />
       </View>
-      {options ? (
-        <View style={styles.optionsContainer}>
-          <View style={styles.optionsRow}>
-            <IconButton icon="refresh" label="Reset" onPress={onReset} />
-            <CircleButton onPress={onAddSticker} />
-            <IconButton
-              icon="save-alt"
-              label="Save"
-              onPress={onSaveImageAsync}
-            />
-          </View>
-        </View>
-      ) : (
-        <View style={styles.footerContainer}>
-          <Button
-            onPress={pickImageAsync}
-            theme={"primary"}
-            label={"Choose a photo"}
-          />
-          <Button onPress={() => setOptions(true)} label={"Use this a photo"} />
-        </View>
-      )}
-      <StatusBar style="light" />
     </GestureHandlerRootView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#25292e",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  text: {
-    color: "#fff",
-  },
-  imageContainer: {
-    flex: 1,
-    paddingTop: 58,
-  },
-  image: {
-    width: 320,
-    height: 440,
-    borderRadius: 18,
-  },
-  footerContainer: {
-    flex: 1 / 3,
-    alignItems: "center",
-  },
-  optionsContainer: {
-    position: "absolute",
-    bottom: 80,
-  },
-  optionsRow: {
-    alignItems: "center",
-    flexDirection: "row",
-  },
-});
+
